@@ -1,0 +1,1306 @@
+<!DOCTYPE html>
+<html lang="it" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BioTastiera - Laboratorio Accessibile di Biologia</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts puliti ad alta leggibilità -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Verdana&family=Outfit:wght@400;600;700&display=swap" rel="stylesheet">
+    <!-- FontAwesome per Icone -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Outfit', 'Verdana', 'sans-serif'],
+                        dyslexic: ['Verdana', 'sans-serif'],
+                    },
+                    colors: {
+                        bio: {
+                            bg: '#0F172A',
+                            card: '#1E293B',
+                            border: '#334155',
+                            accent: '#38BDF8',
+                            green: '#22C55E',
+                            yellow: '#FBBF24',
+                            purple: '#C084FC'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <style>
+        /* Regole di accessibilità per dislessia e DSA */
+        body {
+            letter-spacing: 0.05em;
+            line-height: 1.6;
+        }
+        .dyslexia-font {
+            font-family: Verdana, sans-serif !important;
+            letter-spacing: 0.1em !important;
+            word-spacing: 0.2em !important;
+            line-height: 1.8 !important;
+        }
+        
+        /* Evidenziazione caratteri del testo */
+        .char {
+            transition: all 0.1s ease;
+            padding: 0 2px;
+            border-radius: 4px;
+        }
+        .char.correct {
+            color: #22C55E;
+            background-color: rgba(34, 197, 94, 0.15);
+            font-weight: bold;
+        }
+        .char.incorrect {
+            color: #F59E0B; /* Giallo/Ambra gentile invece del rosso aggressivo */
+            background-color: rgba(245, 158, 11, 0.2);
+            text-decoration: underline;
+        }
+        .char.current {
+            background-color: rgba(56, 189, 248, 0.4);
+            border-bottom: 3px solid #38BDF8;
+        }
+
+        /* Stile tastiera virtuale */
+        .v-key {
+            transition: all 0.08s ease;
+            user-select: none;
+        }
+        .v-key.active-target {
+            background-color: #38BDF8 !important;
+            color: #0F172A !important;
+            transform: scale(1.08);
+            box-shadow: 0 0 12px rgba(56, 189, 248, 0.6);
+            border-color: #ffffff !important;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body class="bg-bio-bg text-slate-100 font-sans h-full min-h-screen flex flex-col justify-between selection:bg-sky-500 selection:text-slate-900">
+
+    <!-- Notifica Toast Non Intrusiva (sostituisce alert()) -->
+    <div id="toast-notification" class="fixed bottom-5 right-5 z-50 max-w-sm bg-bio-card border-2 border-sky-400/50 text-white px-4 py-3 rounded-2xl shadow-2xl flex items-center space-x-3 transform translate-y-24 opacity-0 transition-all duration-300 pointer-events-none">
+        <div id="toast-icon" class="w-8 h-8 rounded-xl bg-sky-500/20 text-sky-400 flex items-center justify-center flex-shrink-0">
+            <i class="fa-solid fa-circle-info"></i>
+        </div>
+        <div class="text-xs sm:text-sm font-medium" id="toast-message">Messaggio di sistema</div>
+    </div>
+
+    <!-- Input file nascosto globale per caricamento JSON -->
+    <input type="file" id="json-file-input" accept=".json,application/json" class="hidden">
+
+    <div class="flex flex-col min-h-screen">
+        <!-- Header Accessibile -->
+        <header class="border-b border-bio-border bg-bio-card/90 backdrop-blur sticky top-0 z-20">
+            <div class="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
+                <div class="flex items-center space-x-3">
+                    <div class="w-11 h-11 rounded-2xl bg-gradient-to-tr from-green-500 to-sky-400 flex items-center justify-center shadow-md">
+                        <i class="fa-solid fa-seedling text-slate-900 text-xl"></i>
+                    </div>
+                    <div>
+                        <h1 class="font-bold text-lg tracking-wide text-white flex items-center flex-wrap gap-1.5">
+                            <span>BioTastiera</span>
+                            <span class="text-xs px-2 py-0.5 rounded-full bg-green-500/20 text-green-400">Accessibile</span>
+                            <span id="autosave-badge" class="hidden text-[11px] px-2 py-0.5 rounded-full bg-sky-500/15 text-sky-300 border border-sky-500/30 font-normal">
+                                <i class="fa-solid fa-cloud-check mr-1"></i>Salvato
+                            </span>
+                        </h1>
+                        <p class="text-xs text-slate-400">Palestra di digitazione e scienze naturali</p>
+                    </div>
+                </div>
+
+                <!-- Strumenti di Accessibilità -->
+                <div class="flex items-center space-x-2">
+                    <button id="btn-font-toggle" class="px-3 py-1.5 rounded-xl bg-bio-border hover:bg-slate-700 text-xs font-semibold flex items-center space-x-1.5 transition" title="Attiva font ad alta leggibilità">
+                        <i class="fa-solid fa-font"></i>
+                        <span class="hidden sm:inline">Font DSA</span>
+                    </button>
+                    <button id="btn-audio-toggle" class="p-2.5 rounded-xl bg-bio-border hover:bg-slate-700 text-slate-200 transition" title="Attiva/Disattiva Suoni">
+                        <i class="fa-solid fa-volume-high" id="sound-icon"></i>
+                    </button>
+                    <button id="btn-help" class="p-2.5 rounded-xl bg-bio-border hover:bg-slate-700 text-slate-200 transition" title="Istruzioni e Aiuto">
+                        <i class="fa-solid fa-circle-question"></i>
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Contenuto Principale -->
+        <main class="max-w-4xl mx-auto px-4 py-6 flex-grow flex flex-col justify-center w-full" id="main-container">
+
+            <!-- 1. SCHERMATA INIZIALE (BENVENUTO & UTENTE + RIPRISTINO/JSON) -->
+            <div id="welcome-panel" class="space-y-5 max-w-lg mx-auto w-full">
+                
+                <!-- BANNER RIPRISTINO AUTOMATICO (Appare se rileva una sessione interrotta in localStorage) -->
+                <div id="autosave-recovery-card" class="hidden bg-gradient-to-br from-sky-900/50 to-bio-card border-2 border-sky-400/60 p-5 rounded-3xl shadow-xl space-y-3">
+                    <div class="flex items-start space-x-3">
+                        <div class="w-11 h-11 rounded-2xl bg-sky-500/20 text-sky-400 flex items-center justify-center text-xl flex-shrink-0 mt-0.5">
+                            <i class="fa-solid fa-clock-rotate-left"></i>
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center justify-between gap-2">
+                                <span class="text-xs font-bold uppercase tracking-wider text-sky-300">Sessione interrotta rilevata!</span>
+                                <span id="recovery-timestamp" class="text-[11px] text-slate-400"></span>
+                            </div>
+                            <h3 id="recovery-student-info" class="text-base font-bold text-white truncate mt-0.5">Studente</h3>
+                            <p id="recovery-progress-info" class="text-xs text-slate-300 mt-1">
+                                Categoria: Parole Chiave &bull; Completate: 0
+                            </p>
+                        </div>
+                    </div>
+                    <div class="flex flex-col sm:flex-row gap-2.5 pt-1">
+                        <button type="button" id="btn-resume-autosave" class="flex-1 py-2.5 px-4 rounded-xl font-bold text-sm bg-sky-400 hover:bg-sky-300 text-slate-900 shadow transition flex items-center justify-center space-x-2">
+                            <i class="fa-solid fa-play"></i>
+                            <span>Riprendi da dove eri rimasta</span>
+                        </button>
+                        <button type="button" id="btn-discard-autosave" class="py-2.5 px-3 rounded-xl font-semibold text-xs bg-bio-bg/80 hover:bg-slate-800 text-slate-400 hover:text-slate-200 border border-bio-border transition" title="Elimina salvataggio temporaneo">
+                            <i class="fa-solid fa-trash-can mr-1"></i>Ignora
+                        </button>
+                    </div>
+                </div>
+
+                <!-- CARD FORM BENVENUTO -->
+                <div class="bg-bio-card border border-bio-border p-6 sm:p-8 rounded-3xl shadow-xl space-y-6">
+                    <div class="text-center space-y-2">
+                        <div class="w-16 h-16 rounded-3xl bg-sky-500/20 text-sky-400 text-3xl mx-auto flex items-center justify-center shadow-inner">
+                            <i class="fa-solid fa-user-graduate"></i>
+                        </div>
+                        <h2 class="text-2xl sm:text-3xl font-bold text-white">Benvenuto in BioTastiera!</h2>
+                        <p class="text-slate-300 text-sm">Inserisci il tuo nome e cognome per iniziare l'esperienza di apprendimento personalizzata.</p>
+                    </div>
+
+                    <form id="user-form" class="space-y-4 pt-1">
+                        <div>
+                            <label class="block text-xs font-bold text-sky-400 uppercase tracking-wider mb-1.5">
+                                <i class="fa-solid fa-user mr-1.5"></i> Nome
+                            </label>
+                            <input type="text" id="input-name" required placeholder="Es. Marco" 
+                                class="w-full bg-bio-bg border border-bio-border rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-sky-400 transition">
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-bold text-sky-400 uppercase tracking-wider mb-1.5">
+                                <i class="fa-solid fa-id-card mr-1.5"></i> Cognome
+                            </label>
+                            <input type="text" id="input-surname" required placeholder="Es. Rossi" 
+                                class="w-full bg-bio-bg border border-bio-border rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-sky-400 transition">
+                        </div>
+
+                        <button type="submit" id="btn-goto-setup" class="w-full py-3.5 rounded-xl font-bold text-base bg-gradient-to-r from-green-500 to-sky-400 text-slate-900 shadow-md hover:opacity-95 transition flex items-center justify-center space-x-2 mt-4">
+                            <span>Avanti</span>
+                            <i class="fa-solid fa-arrow-right"></i>
+                        </button>
+                    </form>
+                </div>
+
+                <!-- SEZIONE GESTIONE SALVATAGGIO JSON (Sotto il form di benvenuto) -->
+                <div class="bg-bio-card/90 border border-bio-border p-5 rounded-3xl shadow-lg space-y-3">
+                    <div class="flex items-center justify-between">
+                        <h3 class="text-xs font-bold uppercase tracking-wider text-purple-300 flex items-center">
+                            <i class="fa-solid fa-file-code mr-2 text-purple-400 text-sm"></i>Backup & Ripristino File JSON
+                        </h3>
+                        <span class="text-[11px] text-slate-400">Salvataggio offline</span>
+                    </div>
+                    <p class="text-xs text-slate-300 leading-relaxed">
+                        Hai già salvato i tuoi progressi su un file <code class="text-purple-300 bg-bio-bg px-1.5 py-0.5 rounded">.json</code>? Caricalo qui per riprendere subito la tua sessione esatta.
+                    </p>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+                        <button type="button" onclick="triggerImportJSON()" class="py-2.5 px-4 rounded-xl bg-purple-500/20 hover:bg-purple-500/30 text-purple-200 border border-purple-400/40 font-bold text-xs sm:text-sm transition flex items-center justify-center space-x-2">
+                            <i class="fa-solid fa-folder-open"></i>
+                            <span>Carica Progressi (.json)</span>
+                        </button>
+                        <button type="button" onclick="exportProgressJSON()" class="py-2.5 px-4 rounded-xl bg-bio-bg hover:bg-slate-800 text-slate-200 border border-bio-border font-semibold text-xs sm:text-sm transition flex items-center justify-center space-x-2">
+                            <i class="fa-solid fa-download text-sky-400"></i>
+                            <span>Scarica Progressi (.json)</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 2. SCHERMATA DI CONFIGURAZIONE (SCELTA CATEGORIA & TIMER) -->
+            <div id="setup-panel" class="space-y-6 hidden">
+                <div class="text-center space-y-2 mb-4">
+                    <h2 id="greeting-title" class="text-2xl sm:text-3xl font-bold text-white">Ciao! Scegli la tua sfida</h2>
+                    <p class="text-slate-300 max-w-lg mx-auto text-sm sm:text-base">Seleziona un argomento di scienze e un tempo rilassante. La tastiera virtuale ti guiderà passo dopo passo.</p>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <!-- Selezione Argomento Biologia -->
+                    <div class="bg-bio-card border border-bio-border p-5 rounded-2xl shadow-lg">
+                        <label class="block text-sm font-bold text-sky-400 uppercase tracking-wider mb-3">
+                            <i class="fa-solid fa-dna mr-2"></i>1. Argomento di Biologia
+                        </label>
+                        <div class="grid grid-cols-2 gap-3" id="category-selector">
+                            <button type="button" data-cat="words" class="cat-btn active p-3.5 rounded-xl border border-sky-400 bg-sky-500/15 text-left transition flex flex-col justify-between space-y-1.5">
+                                <i class="fa-solid fa-puzzle-piece text-xl text-sky-400"></i>
+                                <div>
+                                    <div class="font-bold text-white text-sm">Parole Chiave</div>
+                                    <div class="text-[11px] text-slate-400">Termini brevi (Cellula, DNA...)</div>
+                                </div>
+                            </button>
+                            <button type="button" data-cat="cells" class="cat-btn p-3.5 rounded-xl border border-bio-border bg-bio-bg/50 hover:bg-bio-bg text-left transition flex flex-col justify-between space-y-1.5">
+                                <i class="fa-solid fa-circle-nodes text-xl text-green-400"></i>
+                                <div>
+                                    <div class="font-bold text-white text-sm">La Cellula</div>
+                                    <div class="text-[11px] text-slate-400">Nucleo, membrana e vita</div>
+                                </div>
+                            </button>
+                            <button type="button" data-cat="plants" class="cat-btn p-3.5 rounded-xl border border-bio-border bg-bio-bg/50 hover:bg-bio-bg text-left transition flex flex-col justify-between space-y-1.5">
+                                <i class="fa-solid fa-seedling text-xl text-emerald-400"></i>
+                                <div>
+                                    <div class="font-bold text-white text-sm">Il Mondo Vegetale</div>
+                                    <div class="text-[11px] text-slate-400">Piante, foglie e radici</div>
+                                </div>
+                            </button>
+                            <button type="button" data-cat="body" class="cat-btn p-3.5 rounded-xl border border-bio-border bg-bio-bg/50 hover:bg-bio-bg text-left transition flex flex-col justify-between space-y-1.5">
+                                <i class="fa-solid fa-heart-pulse text-xl text-amber-400"></i>
+                                <div>
+                                    <div class="font-bold text-white text-sm">Il Corpo Umano</div>
+                                    <div class="text-[11px] text-slate-400">Muscoli, ossa e cuore</div>
+                                </div>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Selezione Tempo / Modalità -->
+                    <div class="bg-bio-card border border-bio-border p-5 rounded-2xl shadow-lg flex flex-col justify-between">
+                        <div>
+                            <label class="block text-sm font-bold text-sky-400 uppercase tracking-wider mb-3">
+                                <i class="fa-solid fa-clock mr-2"></i>2. Modalità di Tempo
+                            </label>
+                            <div class="grid grid-cols-3 gap-2.5" id="time-selector">
+                                <button type="button" data-time="0" class="time-btn p-3 rounded-xl border border-bio-border bg-bio-bg/50 text-center transition">
+                                    <div class="text-base font-bold text-white">Libero</div>
+                                    <div class="text-[10px] text-slate-400">Senza ansia</div>
+                                </button>
+                                <button type="button" data-time="45" class="time-btn active p-3 rounded-xl border border-sky-400 bg-sky-500/15 text-center transition">
+                                    <div class="text-base font-bold text-white">45 sec</div>
+                                    <div class="text-[10px] text-slate-400">Tranquillo</div>
+                                </button>
+                                <button type="button" data-time="90" class="time-btn p-3 rounded-xl border border-bio-border bg-bio-bg/50 text-center transition">
+                                    <div class="text-base font-bold text-white">90 sec</div>
+                                    <div class="text-[10px] text-slate-400">Standard</div>
+                                </button>
+                            </div>
+
+                            <!-- Barra rapida JSON anche nella schermata di configurazione -->
+                            <div class="mt-4 pt-3 border-t border-bio-border/70 flex items-center justify-between gap-2">
+                                <span class="text-xs text-slate-400"><i class="fa-solid fa-file-export mr-1 text-purple-400"></i>Salvataggio JSON:</span>
+                                <div class="flex gap-2">
+                                    <button type="button" onclick="triggerImportJSON()" class="px-2.5 py-1.5 rounded-lg bg-purple-500/20 hover:bg-purple-500/30 text-purple-200 border border-purple-500/30 text-xs font-semibold transition">
+                                        <i class="fa-solid fa-upload mr-1"></i>Carica
+                                    </button>
+                                    <button type="button" onclick="exportProgressJSON()" class="px-2.5 py-1.5 rounded-lg bg-bio-bg hover:bg-slate-800 text-sky-300 border border-bio-border text-xs font-semibold transition">
+                                        <i class="fa-solid fa-download mr-1"></i>Scarica
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mt-5 pt-4 border-t border-bio-border flex gap-3">
+                            <button type="button" id="btn-back-to-welcome" class="px-4 py-3.5 rounded-xl font-semibold text-sm bg-bio-border hover:bg-slate-700 text-slate-300 transition" title="Torna indietro">
+                                <i class="fa-solid fa-arrow-left"></i>
+                            </button>
+                            <button type="button" id="btn-start" class="flex-1 py-3.5 rounded-xl font-bold text-base bg-gradient-to-r from-green-500 to-sky-400 text-slate-900 shadow-md hover:opacity-95 transition flex items-center justify-center space-x-2">
+                                <span>INIZIA ESPERIENZA</span>
+                                <i class="fa-solid fa-arrow-right"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 3. SCHERMATA DI GIOCO DIGITAZIONE -->
+            <div id="game-panel" class="hidden space-y-5">
+                <!-- Bar Statistiche, Audio Lettura & Salvataggio Rapido JSON -->
+                <div class="flex flex-wrap items-center justify-between gap-3 bg-bio-card border border-bio-border px-4 py-3 rounded-2xl shadow">
+                    <div class="flex items-center space-x-4">
+                        <div>
+                            <span class="text-xs text-slate-400 block">Tempo</span>
+                            <span id="stat-timer" class="text-lg font-bold text-sky-400 font-mono">45s</span>
+                        </div>
+                        <div class="border-l border-bio-border pl-4">
+                            <span class="text-xs text-slate-400 block">Parole corrette</span>
+                            <span id="stat-words" class="text-lg font-bold text-green-400 font-mono">0</span>
+                        </div>
+                    </div>
+
+                    <div class="flex flex-wrap items-center gap-2">
+                        <!-- Lettore Vocale Testo -->
+                        <button type="button" id="btn-speak" class="px-3 py-1.5 rounded-xl bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 text-xs font-semibold flex items-center space-x-1.5 border border-sky-500/30 transition" title="Ascolta la pronuncia del testo">
+                            <i class="fa-solid fa-volume-high"></i>
+                            <span>Ascolta Testo</span>
+                        </button>
+
+                        <!-- Pulsanti Rapidi Salva/Carica JSON durante il gioco -->
+                        <button type="button" onclick="exportProgressJSON()" class="px-3 py-1.5 rounded-xl bg-green-500/20 hover:bg-green-500/30 text-green-300 text-xs font-semibold flex items-center space-x-1.5 border border-green-500/30 transition" title="Scarica file JSON per salvare i progressi">
+                            <i class="fa-solid fa-download"></i>
+                            <span class="hidden sm:inline">Salva JSON</span>
+                        </button>
+                        <button type="button" onclick="triggerImportJSON()" class="px-3 py-1.5 rounded-xl bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 text-xs font-semibold flex items-center space-x-1.5 border border-purple-500/30 transition" title="Ricarica un salvataggio JSON">
+                            <i class="fa-solid fa-upload"></i>
+                            <span class="hidden sm:inline">Carica JSON</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Box Testo da Digitare (Grande e chiaro) -->
+                <div class="relative bg-bio-card border-2 border-bio-border rounded-2xl p-6 md:p-8 shadow-xl">
+                    <div class="flex items-center justify-between mb-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                        <span id="game-category-label"><i class="fa-solid fa-seedling mr-1 text-green-400"></i> Parola Corrente</span>
+                        <span>Digita i caratteri evidenziati sotto</span>
+                    </div>
+
+                    <!-- Input nascosto per catturare tastiera -->
+                    <input type="text" id="hidden-input" class="absolute opacity-0 pointer-events-none" autocomplete="off" spellcheck="false">
+
+                    <!-- Testo da digitare -->
+                    <div id="typing-text" class="text-xl sm:text-2xl md:text-3xl font-medium tracking-wide text-slate-300 min-h-[90px] flex items-center flex-wrap gap-y-2 select-none leading-relaxed">
+                        <!-- Generato via JS -->
+                    </div>
+
+                    <!-- Overlay se perde focus -->
+                    <div id="focus-overlay" class="absolute inset-0 bg-bio-bg/85 backdrop-blur-sm flex flex-col items-center justify-center cursor-pointer text-sky-400 font-semibold text-base rounded-2xl">
+                        <i class="fa-solid fa-hand-pointer text-3xl mb-2 animate-bounce"></i>
+                        <span>Clicca qui per iniziare a digitare</span>
+                    </div>
+                </div>
+
+                <!-- Tastiera Virtuale Interattiva -->
+                <div class="bg-bio-card border border-bio-border p-3 sm:p-4 rounded-2xl shadow-xl overflow-x-auto">
+                    <div class="min-w-[620px] max-w-3xl mx-auto space-y-1.5">
+                        <!-- Riga 1 -->
+                        <div class="flex justify-center space-x-1" id="k-row-1"></div>
+                        <!-- Riga 2 -->
+                        <div class="flex justify-center space-x-1" id="k-row-2"></div>
+                        <!-- Riga 3 -->
+                        <div class="flex justify-center space-x-1" id="k-row-3"></div>
+                        <!-- Riga 4 Spazio -->
+                        <div class="flex justify-center space-x-1" id="k-row-4"></div>
+                    </div>
+                </div>
+
+                <!-- Footer azioni gioco -->
+                <div class="flex flex-wrap justify-between items-center gap-2 text-xs text-slate-400 px-2">
+                    <div><i class="fa-solid fa-shield-halved text-green-400 mr-1"></i>Salvataggio automatico attivo: se chiudi o si stacca, puoi riprendere.</div>
+                    <button type="button" id="btn-restart" class="px-3 py-1.5 rounded-lg bg-bio-border hover:bg-slate-700 text-slate-300 font-semibold transition">
+                        <i class="fa-solid fa-rotate-right mr-1"></i>Riavvia
+                    </button>
+                </div>
+            </div>
+
+            <!-- 4. SCHERMATA REPORT FINALE -->
+            <div id="modal-report" class="fixed inset-0 bg-bio-bg/90 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden">
+                <div class="bg-bio-card border-2 border-green-500/40 rounded-3xl max-w-lg w-full p-6 md:p-8 shadow-2xl relative text-center space-y-5">
+                    <div class="w-16 h-16 rounded-3xl bg-green-500/20 text-green-400 text-3xl mx-auto flex items-center justify-center shadow-inner">
+                        <i class="fa-solid fa-award" id="report-icon"></i>
+                    </div>
+
+                    <div>
+                        <h2 class="text-2xl font-bold text-white mb-1">Ottimo Lavoro, <span id="report-username" class="text-sky-400">Studente</span>!</h2>
+                        <p id="report-badge-title" class="text-green-400 font-semibold text-sm">Hai conquistato la Fogliolina d'Oro!</p>
+                    </div>
+
+                    <!-- Statistiche gentili -->
+                    <div class="grid grid-cols-2 gap-3 bg-bio-bg/60 border border-bio-border p-4 rounded-2xl">
+                        <div>
+                            <div class="text-xs text-slate-400">Parole Completate</div>
+                            <div id="report-words" class="text-2xl font-bold text-green-400 font-mono">0</div>
+                        </div>
+                        <div>
+                            <div class="text-xs text-slate-400">Precisione</div>
+                            <div id="report-accuracy" class="text-2xl font-bold text-sky-400 font-mono">100%</div>
+                        </div>
+                    </div>
+
+                    <!-- Frase motivazionale personalizzata -->
+                    <p id="report-praise" class="text-slate-300 text-sm leading-relaxed px-2">
+                        Hai dimostrato grande impegno e costanza. La biologia è piena di meraviglie e le tue dita stanno diventando sempre più agili!
+                    </p>
+
+                    <!-- Esportazione JSON del Report -->
+                    <div class="pt-1">
+                        <button type="button" onclick="exportProgressJSON()" class="w-full py-2.5 px-4 bg-purple-500/20 hover:bg-purple-500/30 text-purple-200 border border-purple-400/40 font-bold rounded-xl transition text-xs sm:text-sm flex items-center justify-center space-x-2">
+                            <i class="fa-solid fa-file-arrow-down"></i>
+                            <span>Scarica Risultati e Progressi (.json)</span>
+                        </button>
+                    </div>
+
+                    <!-- Pulsanti -->
+                    <div class="flex flex-col sm:flex-row gap-3 pt-1">
+                        <button type="button" id="btn-play-again" class="flex-1 py-3 bg-gradient-to-r from-green-500 to-sky-400 text-slate-900 font-bold rounded-xl shadow hover:opacity-95 transition">
+                            <i class="fa-solid fa-rotate-right mr-2"></i>Gioca Ancora
+                        </button>
+                        <button type="button" id="btn-change-setup" class="flex-1 py-3 bg-bio-border hover:bg-slate-700 text-white font-bold rounded-xl transition">
+                            <i class="fa-solid fa-sliders mr-2"></i>Menu Scienze
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- MODALE INFO / GUIDA -->
+            <div id="modal-info" class="fixed inset-0 bg-bio-bg/90 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden">
+                <div class="bg-bio-card border border-bio-border rounded-3xl max-w-md w-full p-6 shadow-2xl relative space-y-4">
+                    <button type="button" id="btn-close-info" class="absolute top-4 right-4 text-slate-400 hover:text-white text-lg">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                    <h3 class="text-lg font-bold text-white flex items-center">
+                        <i class="fa-solid fa-seedling text-green-400 mr-2"></i>Guida a BioTastiera
+                    </h3>
+                    <div class="space-y-2.5 text-xs sm:text-sm text-slate-300 leading-relaxed">
+                        <p><strong class="text-white">1. Inserimento:</strong> Inserisci nome e cognome per iniziare.</p>
+                        <p><strong class="text-white">2. Senza fretta:</strong> Scegli il tempo che preferisci o la modalità libera per digitare in totale tranquillità.</p>
+                        <p><strong class="text-white">3. Tastiera Guida:</strong> Guarda il tasto azzurro illuminato sulla tastiera virtuale per sapere quale tasto premere.</p>
+                        <p><strong class="text-white">4. Salvataggio & File JSON:</strong> I tuoi progressi si salvano in automatico nel browser. Puoi anche scaricare un file <strong>.json</strong> sul tuo computer e ricaricarlo in qualsiasi momento per riprendere da dove eri rimasta!</p>
+                        <p><strong class="text-white">5. Leggibilità DSA & Voce:</strong> Attiva il font ad alta leggibilità in alto a destra o ascolta la pronuncia con "Ascolta Testo".</p>
+                    </div>
+                    <button type="button" id="btn-ack-info" class="w-full py-2.5 bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 font-bold rounded-xl border border-sky-500/40 transition text-xs sm:text-sm">
+                        Ho capito, iniziamo!
+                    </button>
+                </div>
+            </div>
+
+        </main>
+
+        <!-- Footer -->
+        <footer class="border-t border-bio-border py-3 text-center text-xs text-slate-500 bg-bio-card/90">
+            <div class="max-w-4xl mx-auto px-4 flex flex-col sm:flex-row justify-between items-center gap-1">
+                <div>BioTastiera &bull; Didattica Inclusiva e Scienze</div>
+                <div class="text-slate-400"><i class="fa-solid fa-heart text-red-400 mr-1"></i> Progettato per l'accessibilità</div>
+            </div>
+        </footer>
+    </div>
+
+    <!-- SCRIPT APPLICAZIONE -->
+    <script>
+        /* ========================================================
+           DATABASE DI BIOLOGIA OTTIMIZZATO PER RAGAZZI
+           ======================================================== */
+        const BIO_CONTENT = {
+            words: [
+                "cellula", "nucleo", "dna", "pianta", "foglia", "radice", 
+                "muscolo", "cuore", "ossigeno", "batterio", "ecosistema", "fiore"
+            ],
+            cells: [
+                "La cellula e l unita fondamentale della vita.",
+                "Il nucleo custodisce il prezioso DNA.",
+                "La membrana cellulare protegge l interno.",
+                "I mitocondri producono energia per la cellula."
+            ],
+            plants: [
+                "Le piante producono ossigeno per tutti noi.",
+                "La clorofilla cattura la luce del Sole.",
+                "Le radici assorbono acqua dal terreno.",
+                "Il fiore permette alla pianta di riprodursi."
+            ],
+            body: [
+                "Il cuore pompa il sangue in tutto il corpo.",
+                "I muscoli ci permettono di camminare e correre.",
+                "Lo scheletro sostiene e protegge gli organi.",
+                "I polmoni respirano l aria fresca ogni giorno."
+            ]
+        };
+
+        const CATEGORY_LABELS = {
+            words: "Parole Chiave",
+            cells: "La Cellula",
+            plants: "Il Mondo Vegetale",
+            body: "Il Corpo Umano"
+        };
+
+        const AUTOSAVE_KEY = "biotastiera_autosave";
+
+        /* ========================================================
+           STATO APPLICAZIONE
+           ======================================================== */
+        let studentName = "";
+        let studentSurname = "";
+        let currentCategory = 'words';
+        let timeLimit = 45; // secondi (0 = libero)
+        
+        let textList = [];
+        let currentTextIndex = 0;
+        let currentText = "";
+        let currentCharIdx = 0;
+        let charStates = []; // Array di stati ('pending' | 'correct' | 'incorrect') per ripristino esatto
+        
+        let timerSeconds = 45;
+        let timerInterval = null;
+        let isGaming = false;
+        let isStarted = false;
+        
+        let wordsCompletedCount = 0;
+        let totalCharsTyped = 0;
+        let totalErrorsCount = 0;
+        let soundEnabled = true;
+        let dyslexiaFontActive = false;
+
+        /* ========================================================
+           NOTIFICHE TOAST (NO ALERT)
+           ======================================================== */
+        let toastTimeout = null;
+        function showToast(message, type = 'info') {
+            const toast = document.getElementById('toast-notification');
+            const toastMsg = document.getElementById('toast-message');
+            const toastIcon = document.getElementById('toast-icon');
+
+            toastMsg.textContent = message;
+
+            // Reset stili
+            toast.className = 'fixed bottom-5 right-5 z-50 max-w-sm bg-bio-card border-2 text-white px-4 py-3 rounded-2xl shadow-2xl flex items-center space-x-3 transition-all duration-300 pointer-events-none';
+            
+            if (type === 'success') {
+                toast.classList.add('border-green-400/60');
+                toastIcon.className = 'w-8 h-8 rounded-xl bg-green-500/20 text-green-400 flex items-center justify-center flex-shrink-0';
+                toastIcon.innerHTML = '<i class="fa-solid fa-circle-check"></i>';
+            } else if (type === 'error') {
+                toast.classList.add('border-amber-400/60');
+                toastIcon.className = 'w-8 h-8 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center flex-shrink-0';
+                toastIcon.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i>';
+            } else {
+                toast.classList.add('border-sky-400/60');
+                toastIcon.className = 'w-8 h-8 rounded-xl bg-sky-500/20 text-sky-400 flex items-center justify-center flex-shrink-0';
+                toastIcon.innerHTML = '<i class="fa-solid fa-circle-info"></i>';
+            }
+
+            // Mostra
+            requestAnimationFrame(() => {
+                toast.classList.remove('translate-y-24', 'opacity-0');
+                toast.classList.add('translate-y-0', 'opacity-100');
+            });
+
+            clearTimeout(toastTimeout);
+            toastTimeout = setTimeout(() => {
+                toast.classList.remove('translate-y-0', 'opacity-100');
+                toast.classList.add('translate-y-24', 'opacity-0');
+            }, 3800);
+        }
+
+        /* ========================================================
+           SERIALIZZAZIONE, SALVATAGGIO AUTOMATICO E GESTIONE JSON
+           ======================================================== */
+        function buildSessionSnapshot() {
+            return {
+                app: "BioTastiera",
+                version: "1.1",
+                savedAt: new Date().toISOString(),
+                studentName: studentName || document.getElementById('input-name').value.trim() || "Studente",
+                studentSurname: studentSurname || document.getElementById('input-surname').value.trim() || "",
+                currentCategory,
+                timeLimit,
+                dyslexiaFontActive,
+                soundEnabled,
+                currentTextIndex,
+                currentCharIdx,
+                charStates: [...charStates],
+                timerSeconds,
+                wordsCompletedCount,
+                totalCharsTyped,
+                totalErrorsCount,
+                isGaming
+            };
+        }
+
+        function saveAutoState() {
+            try {
+                // Salviamo solo se c'è almeno un nome inserito o una partita avviata
+                const nameVal = studentName || document.getElementById('input-name').value.trim();
+                const surnameVal = studentSurname || document.getElementById('input-surname').value.trim();
+                if (!nameVal && !surnameVal && !isGaming && wordsCompletedCount === 0) return;
+
+                const snapshot = buildSessionSnapshot();
+                localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(snapshot));
+
+                const badge = document.getElementById('autosave-badge');
+                if (badge) {
+                    badge.classList.remove('hidden');
+                }
+            } catch (err) {
+                console.warn("Impossibile salvare in localStorage:", err);
+            }
+        }
+
+        function clearAutoState() {
+            try {
+                localStorage.removeItem(AUTOSAVE_KEY);
+                const badge = document.getElementById('autosave-badge');
+                if (badge) badge.classList.add('hidden');
+            } catch (err) {
+                console.warn("Errore rimozione autosave:", err);
+            }
+        }
+
+        function checkAutoSaveOnLoad() {
+            try {
+                const raw = localStorage.getItem(AUTOSAVE_KEY);
+                if (!raw) return;
+                const data = JSON.parse(raw);
+                if (!data || data.app !== "BioTastiera" || !data.studentName) return;
+
+                const card = document.getElementById('autosave-recovery-card');
+                const studentInfo = document.getElementById('recovery-student-info');
+                const progressInfo = document.getElementById('recovery-progress-info');
+                const timestampInfo = document.getElementById('recovery-timestamp');
+
+                const fullName = `${data.studentName} ${data.studentSurname || ''}`.trim();
+                const catName = CATEGORY_LABELS[data.currentCategory] || "Parole Chiave";
+                const timeStr = data.timeLimit > 0 ? `${data.timerSeconds}s rimasti` : 'Tempo Libero';
+
+                studentInfo.textContent = fullName;
+                progressInfo.textContent = `Argomento: ${catName} • Completate: ${data.wordsCompletedCount || 0} • ${timeStr}`;
+
+                if (data.savedAt) {
+                    const dt = new Date(data.savedAt);
+                    timestampInfo.textContent = dt.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+                }
+
+                card.classList.remove('hidden');
+
+                // Precompila anche i campi per comodità
+                document.getElementById('input-name').value = data.studentName || "";
+                document.getElementById('input-surname').value = data.studentSurname || "";
+            } catch (err) {
+                console.warn("Errore lettura autosave:", err);
+            }
+        }
+
+        function exportProgressJSON() {
+            try {
+                const snapshot = buildSessionSnapshot();
+                const jsonString = JSON.stringify(snapshot, null, 2);
+                const blob = new Blob([jsonString], { type: "application/json" });
+                const url = URL.createObjectURL(blob);
+
+                const safeName = (snapshot.studentName || "Studente").replace(/[^a-zA-Z0-9_-]/g, "_");
+                const safeSurname = (snapshot.studentSurname || "").replace(/[^a-zA-Z0-9_-]/g, "_");
+                const dateStamp = new Date().toISOString().slice(0, 10);
+                const fileName = safeSurname
+                    ? `BioTastiera_${safeName}_${safeSurname}_${dateStamp}.json`
+                    : `BioTastiera_${safeName}_${dateStamp}.json`;
+
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = fileName;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+
+                saveAutoState();
+                showToast(`File "${fileName}" scaricato!`, 'success');
+            } catch (err) {
+                console.error("Errore esportazione JSON:", err);
+                showToast("Errore durante il salvataggio del file JSON.", 'error');
+            }
+        }
+
+        function triggerImportJSON() {
+            const fileInput = document.getElementById('json-file-input');
+            fileInput.value = "";
+            fileInput.click();
+        }
+
+        document.getElementById('json-file-input').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                try {
+                    const data = JSON.parse(event.target.result);
+                    if (!validateSessionData(data)) {
+                        showToast("Il file selezionato non è un salvataggio valido di BioTastiera.", 'error');
+                        return;
+                    }
+                    restoreFromSessionData(data, true);
+                } catch (err) {
+                    console.error("Errore parsing JSON:", err);
+                    showToast("Impossibile leggere il file JSON. Controlla che non sia danneggiato.", 'error');
+                }
+            };
+            reader.readAsText(file);
+        });
+
+        function validateSessionData(data) {
+            if (!data || typeof data !== 'object') return false;
+            if (data.app !== "BioTastiera") return false;
+            if (!data.currentCategory || !BIO_CONTENT[data.currentCategory]) return false;
+            if (typeof data.currentTextIndex !== 'number' || data.currentTextIndex < 0) return false;
+            if (typeof data.currentCharIdx !== 'number' || data.currentCharIdx < 0) return false;
+            return true;
+        }
+
+        function restoreFromSessionData(data, fromFile = false) {
+            clearInterval(timerInterval);
+
+            // 1. Ripristina anagrafica
+            studentName = data.studentName || "Studente";
+            studentSurname = data.studentSurname || "";
+            document.getElementById('input-name').value = studentName;
+            document.getElementById('input-surname').value = studentSurname;
+            document.getElementById('greeting-title').textContent = `Ciao, ${studentName}! Scegli la tua sfida`;
+
+            // 2. Ripristina impostazioni accessibilità
+            dyslexiaFontActive = Boolean(data.dyslexiaFontActive);
+            applyDyslexiaFontUI();
+
+            soundEnabled = data.soundEnabled !== undefined ? Boolean(data.soundEnabled) : true;
+            const soundIcon = document.getElementById('sound-icon');
+            soundIcon.className = soundEnabled ? 'fa-solid fa-volume-high' : 'fa-solid fa-volume-xmark text-slate-500';
+
+            // 3. Ripristina categoria e timer nella UI di setup
+            currentCategory = BIO_CONTENT[data.currentCategory] ? data.currentCategory : 'words';
+            timeLimit = typeof data.timeLimit === 'number' ? data.timeLimit : 45;
+
+            document.querySelectorAll('.cat-btn').forEach(b => {
+                if (b.dataset.cat === currentCategory) {
+                    b.classList.add('active', 'border-sky-400', 'bg-sky-500/15');
+                    b.classList.remove('border-bio-border', 'bg-bio-bg/50');
+                } else {
+                    b.classList.remove('active', 'border-sky-400', 'bg-sky-500/15');
+                    b.classList.add('border-bio-border', 'bg-bio-bg/50');
+                }
+            });
+
+            document.querySelectorAll('.time-btn').forEach(b => {
+                if (parseInt(b.dataset.time) === timeLimit) {
+                    b.classList.add('active', 'border-sky-400', 'bg-sky-500/15');
+                    b.classList.remove('border-bio-border', 'bg-bio-bg/50');
+                } else {
+                    b.classList.remove('active', 'border-sky-400', 'bg-sky-500/15');
+                    b.classList.add('border-bio-border', 'bg-bio-bg/50');
+                }
+            });
+
+            // 4. Ripristina stato esatto della partita
+            textList = [...BIO_CONTENT[currentCategory]];
+            currentTextIndex = data.currentTextIndex < textList.length ? data.currentTextIndex : 0;
+            currentText = textList[currentTextIndex];
+
+            const maxIdx = currentText.length;
+            currentCharIdx = Math.min(data.currentCharIdx || 0, maxIdx);
+
+            // Ripristina array degli stati dei caratteri
+            if (Array.isArray(data.charStates) && data.charStates.length === currentText.length) {
+                charStates = [...data.charStates];
+            } else {
+                charStates = currentText.split('').map((_, idx) => idx < currentCharIdx ? 'correct' : 'pending');
+            }
+
+            wordsCompletedCount = data.wordsCompletedCount || 0;
+            totalCharsTyped = data.totalCharsTyped || 0;
+            totalErrorsCount = data.totalErrorsCount || 0;
+
+            if (timeLimit > 0) {
+                timerSeconds = (typeof data.timerSeconds === 'number' && data.timerSeconds > 0)
+                    ? data.timerSeconds
+                    : timeLimit;
+                statTimer.textContent = `${timerSeconds}s`;
+            } else {
+                timerSeconds = 0;
+                statTimer.textContent = 'Libero';
+            }
+
+            statWords.textContent = wordsCompletedCount;
+
+            // Aggiorna etichetta categoria
+            const catLabel = document.getElementById('game-category-label');
+            if (catLabel) {
+                catLabel.innerHTML = `<i class="fa-solid fa-seedling mr-1 text-green-400"></i> ${CATEGORY_LABELS[currentCategory] || 'Parola Corrente'}`;
+            }
+
+            // Chiudi eventuali modali e passa direttamente alla schermata di gioco se stava giocando o ha progressi
+            modalReport.classList.add('hidden');
+            modalInfo.classList.add('hidden');
+            welcomePanel.classList.add('hidden');
+
+            if (data.isGaming || wordsCompletedCount > 0 || currentCharIdx > 0) {
+                setupPanel.classList.add('hidden');
+                gamePanel.classList.remove('hidden');
+
+                isGaming = true;
+                isStarted = false; // Il timer ripartirà al primo tasto premuto per non mettere fretta al rientro
+
+                renderSentence();
+                if (currentCharIdx < currentText.length) {
+                    highlightKey(currentText[currentCharIdx]);
+                }
+
+                // Mostra overlay di focus così l'utente clicca quando è pronta a riprendere
+                focusOverlay.classList.remove('hidden');
+            } else {
+                gamePanel.classList.add('hidden');
+                setupPanel.classList.remove('hidden');
+                isGaming = false;
+            }
+
+            saveAutoState();
+            showToast(
+                fromFile
+                    ? `Bentornata ${studentName}! Sessione ripristinata dal file JSON.`
+                    : `Bentornata ${studentName}! Riprendi esattamente da dove eri rimasta.`,
+                'success'
+            );
+        }
+
+        /* ========================================================
+           GENERAZIONE TASTIERA VIRTUALE INTERATTIVA
+           ======================================================== */
+        const KEYBOARD_LAYOUT = [
+            ['q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p'],
+            ['a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l'],
+            ['z', 'x', 'c', 'v', 'b', 'n', 'm'],
+            [' '] // Spazio
+        ];
+
+        function buildVirtualKeyboard() {
+            const rows = [
+                document.getElementById('k-row-1'),
+                document.getElementById('k-row-2'),
+                document.getElementById('k-row-3'),
+                document.getElementById('k-row-4')
+            ];
+
+            KEYBOARD_LAYOUT.forEach((rowKeys, rowIndex) => {
+                const container = rows[rowIndex];
+                if (!container) return;
+                container.innerHTML = '';
+                rowKeys.forEach(key => {
+                    const btn = document.createElement('div');
+                    btn.className = key === ' ' 
+                        ? 'v-key bg-bio-bg border border-bio-border text-slate-300 rounded-xl h-10 w-64 flex items-center justify-center text-xs font-mono uppercase tracking-widest'
+                        : 'v-key bg-bio-bg border border-bio-border text-slate-200 rounded-xl h-10 w-9 sm:w-10 flex items-center justify-center text-xs sm:text-sm font-mono uppercase font-semibold shadow-sm';
+                    btn.textContent = key === ' ' ? 'Spazio' : key;
+                    btn.dataset.key = key;
+                    container.appendChild(btn);
+                });
+            });
+        }
+
+        function highlightKey(char) {
+            document.querySelectorAll('.v-key').forEach(el => el.classList.remove('active-target'));
+            if (!char) return;
+            const target = char.toLowerCase();
+            const keyElement = document.querySelector(`.v-key[data-key="${target}"]`);
+            if (keyElement) {
+                keyElement.classList.add('active-target');
+            }
+        }
+
+        /* ========================================================
+           AUDIO SINTETIZZATORE (Web Audio API)
+           ======================================================== */
+        const AudioFX = {
+            ctx: null,
+            init() {
+                if (!this.ctx) {
+                    const AudioContext = window.AudioContext || window.webkitAudioContext;
+                    this.ctx = new AudioContext();
+                }
+            },
+            playSoftKey() {
+                if (!soundEnabled) return;
+                this.init();
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(520, this.ctx.currentTime);
+                gain.gain.setValueAtTime(0.03, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.08);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.08);
+            },
+            playGentleNotice() {
+                if (!soundEnabled) return;
+                this.init();
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(320, this.ctx.currentTime);
+                gain.gain.setValueAtTime(0.04, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.12);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.12);
+            },
+            playSuccess() {
+                if (!soundEnabled) return;
+                this.init();
+                const now = this.ctx.currentTime;
+                [330, 392, 523].forEach((freq, idx) => {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.frequency.setValueAtTime(freq, now + idx * 0.1);
+                    gain.gain.setValueAtTime(0.05, now + idx * 0.1);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.1 + 0.3);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start(now + idx * 0.1);
+                    osc.stop(now + idx * 0.1 + 0.3);
+                });
+            }
+        };
+
+        /* ========================================================
+           SINTESI VOCALE (SPEECH SYNTHESIS)
+           ======================================================== */
+        function speakCurrentText() {
+            if ('speechSynthesis' in window) {
+                window.speechSynthesis.cancel();
+                const utterance = new SpeechSynthesisUtterance(currentText);
+                utterance.lang = 'it-IT';
+                utterance.rate = 0.9;
+                window.speechSynthesis.speak(utterance);
+            }
+        }
+
+        /* ========================================================
+           ELEMENTI DOM & EVENTI NAVIGAZIONE SCHERMATE
+           ======================================================== */
+        const welcomePanel = document.getElementById('welcome-panel');
+        const setupPanel = document.getElementById('setup-panel');
+        const gamePanel = document.getElementById('game-panel');
+        const modalReport = document.getElementById('modal-report');
+        const modalInfo = document.getElementById('modal-info');
+        
+        const typingTextElem = document.getElementById('typing-text');
+        const hiddenInput = document.getElementById('hidden-input');
+        const focusOverlay = document.getElementById('focus-overlay');
+        const statTimer = document.getElementById('stat-timer');
+        const statWords = document.getElementById('stat-words');
+
+        // Eventi Banner Ripristino Automatico
+        document.getElementById('btn-resume-autosave').addEventListener('click', () => {
+            try {
+                const raw = localStorage.getItem(AUTOSAVE_KEY);
+                if (raw) {
+                    const data = JSON.parse(raw);
+                    restoreFromSessionData(data, false);
+                }
+            } catch (err) {
+                showToast("Impossibile ripristinare la sessione precedente.", 'error');
+            }
+        });
+
+        document.getElementById('btn-discard-autosave').addEventListener('click', () => {
+            clearAutoState();
+            document.getElementById('autosave-recovery-card').classList.add('hidden');
+            showToast("Salvataggio temporaneo rimosso.", 'info');
+        });
+
+        // Gestione passaggio da Schermata Benvenuto a Configurazione
+        document.getElementById('user-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const nameInput = document.getElementById('input-name').value.trim();
+            const surnameInput = document.getElementById('input-surname').value.trim();
+            
+            if (nameInput && surnameInput) {
+                studentName = nameInput;
+                studentSurname = surnameInput;
+                
+                document.getElementById('greeting-title').textContent = `Ciao, ${studentName}! Scegli la tua sfida`;
+                
+                welcomePanel.classList.add('hidden');
+                setupPanel.classList.remove('hidden');
+                saveAutoState();
+            }
+        });
+
+        // Pulsante indietro da setup a benvenuto
+        document.getElementById('btn-back-to-welcome').addEventListener('click', () => {
+            setupPanel.classList.add('hidden');
+            welcomePanel.classList.remove('hidden');
+        });
+
+        // Selezione Categorie
+        document.querySelectorAll('.cat-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.cat-btn').forEach(b => {
+                    b.classList.remove('active', 'border-sky-400', 'bg-sky-500/15');
+                    b.classList.add('border-bio-border', 'bg-bio-bg/50');
+                });
+                btn.classList.add('active', 'border-sky-400', 'bg-sky-500/15');
+                btn.classList.remove('border-bio-border', 'bg-bio-bg/50');
+                currentCategory = btn.dataset.cat;
+                saveAutoState();
+            });
+        });
+
+        // Selezione Tempo
+        document.querySelectorAll('.time-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.time-btn').forEach(b => {
+                    b.classList.remove('active', 'border-sky-400', 'bg-sky-500/15');
+                    b.classList.add('border-bio-border', 'bg-bio-bg/50');
+                });
+                btn.classList.add('active', 'border-sky-400', 'bg-sky-500/15');
+                btn.classList.remove('border-bio-border', 'bg-bio-bg/50');
+                timeLimit = parseInt(btn.dataset.time);
+                saveAutoState();
+            });
+        });
+
+        document.getElementById('btn-start').addEventListener('click', startGame);
+        document.getElementById('btn-restart').addEventListener('click', resetGameSession);
+        document.getElementById('btn-play-again').addEventListener('click', () => {
+            modalReport.classList.add('hidden');
+            startGame();
+        });
+        document.getElementById('btn-change-setup').addEventListener('click', () => {
+            modalReport.classList.add('hidden');
+            gamePanel.classList.add('hidden');
+            setupPanel.classList.remove('hidden');
+            saveAutoState();
+        });
+
+        // Font DSA Toggle
+        function applyDyslexiaFontUI() {
+            if (dyslexiaFontActive) {
+                typingTextElem.classList.add('dyslexia-font');
+                document.getElementById('btn-font-toggle').classList.add('bg-sky-500/20', 'border', 'border-sky-400/50', 'text-sky-300');
+            } else {
+                typingTextElem.classList.remove('dyslexia-font');
+                document.getElementById('btn-font-toggle').classList.remove('bg-sky-500/20', 'border', 'border-sky-400/50', 'text-sky-300');
+            }
+        }
+
+        document.getElementById('btn-font-toggle').addEventListener('click', () => {
+            dyslexiaFontActive = !dyslexiaFontActive;
+            applyDyslexiaFontUI();
+            saveAutoState();
+        });
+
+        // Audio Toggle
+        document.getElementById('btn-audio-toggle').addEventListener('click', () => {
+            soundEnabled = !soundEnabled;
+            const icon = document.getElementById('sound-icon');
+            icon.className = soundEnabled ? 'fa-solid fa-volume-high' : 'fa-solid fa-volume-xmark text-slate-500';
+            saveAutoState();
+        });
+
+        // Guida Modal
+        document.getElementById('btn-help').addEventListener('click', () => modalInfo.classList.remove('hidden'));
+        document.getElementById('btn-close-info').addEventListener('click', () => modalInfo.classList.add('hidden'));
+        document.getElementById('btn-ack-info').addEventListener('click', () => modalInfo.classList.add('hidden'));
+
+        document.getElementById('btn-speak').addEventListener('click', speakCurrentText);
+
+        /* ========================================================
+           LOGICA DI GIOCO
+           ======================================================== */
+        function startGame() {
+            setupPanel.classList.add('hidden');
+            gamePanel.classList.remove('hidden');
+            
+            const catLabel = document.getElementById('game-category-label');
+            if (catLabel) {
+                catLabel.innerHTML = `<i class="fa-solid fa-seedling mr-1 text-green-400"></i> ${CATEGORY_LABELS[currentCategory] || 'Parola Corrente'}`;
+            }
+
+            textList = [...BIO_CONTENT[currentCategory]];
+            currentTextIndex = 0;
+            
+            resetGameSession();
+        }
+
+        function resetGameSession() {
+            clearInterval(timerInterval);
+            timerSeconds = timeLimit;
+            wordsCompletedCount = 0;
+            totalCharsTyped = 0;
+            totalErrorsCount = 0;
+            isStarted = false;
+            isGaming = true;
+
+            statWords.textContent = '0';
+            if (timeLimit > 0) {
+                statTimer.textContent = `${timerSeconds}s`;
+            } else {
+                statTimer.textContent = 'Libero';
+            }
+
+            loadNextSentence();
+            focusInput();
+            saveAutoState();
+        }
+
+        function loadNextSentence() {
+            if (currentTextIndex >= textList.length) {
+                currentTextIndex = 0;
+            }
+            currentText = textList[currentTextIndex];
+            currentCharIdx = 0;
+            charStates = currentText.split('').map(() => 'pending');
+            renderSentence();
+            
+            if (currentText.length > 0) {
+                highlightKey(currentText[0]);
+            }
+            saveAutoState();
+        }
+
+        function renderSentence() {
+            typingTextElem.innerHTML = '';
+            currentText.split('').forEach((char, index) => {
+                const span = document.createElement('span');
+                span.classList.add('char');
+                
+                const state = charStates[index];
+                if (state === 'correct') {
+                    span.classList.add('correct');
+                } else if (state === 'incorrect') {
+                    span.classList.add('incorrect');
+                }
+
+                if (index === currentCharIdx) {
+                    span.classList.add('current');
+                }
+                
+                span.textContent = char;
+                typingTextElem.appendChild(span);
+            });
+        }
+
+        function focusInput() {
+            hiddenInput.focus();
+            focusOverlay.classList.add('hidden');
+        }
+
+        typingTextElem.addEventListener('click', focusInput);
+        focusOverlay.addEventListener('click', focusInput);
+        hiddenInput.addEventListener('blur', () => {
+            if (isGaming) focusOverlay.classList.remove('hidden');
+        });
+
+        window.addEventListener('keydown', (e) => {
+            if (!isGaming) return;
+            if (e.key === 'Escape') {
+                resetGameSession();
+                return;
+            }
+            if (e.ctrlKey || e.altKey || e.metaKey || e.key === 'Tab') return;
+
+            if (document.activeElement !== hiddenInput) {
+                hiddenInput.focus();
+            }
+
+            if (!isStarted && e.key.length === 1 && timeLimit > 0) {
+                startTimer();
+                isStarted = true;
+            }
+
+            const charSpans = typingTextElem.querySelectorAll('.char');
+
+            if (e.key === 'Backspace') {
+                if (currentCharIdx > 0) {
+                    charSpans[currentCharIdx].classList.remove('current');
+                    currentCharIdx--;
+                    charStates[currentCharIdx] = 'pending';
+                    charSpans[currentCharIdx].className = 'char current';
+                    AudioFX.playSoftKey();
+                    highlightKey(currentText[currentCharIdx]);
+                    saveAutoState();
+                }
+                return;
+            }
+
+            if (e.key.length === 1) {
+                if (currentCharIdx >= currentText.length) return;
+
+                const expected = currentText[currentCharIdx];
+                const typed = e.key;
+                totalCharsTyped++;
+
+                if (typed.toLowerCase() === expected.toLowerCase()) {
+                    charStates[currentCharIdx] = 'correct';
+                    charSpans[currentCharIdx].className = 'char correct';
+                    AudioFX.playSoftKey();
+                } else {
+                    charStates[currentCharIdx] = 'incorrect';
+                    charSpans[currentCharIdx].className = 'char incorrect';
+                    totalErrorsCount++;
+                    AudioFX.playGentleNotice();
+                }
+
+                currentCharIdx++;
+
+                if (currentCharIdx < currentText.length) {
+                    charSpans[currentCharIdx].classList.add('current');
+                    highlightKey(currentText[currentCharIdx]);
+                    saveAutoState();
+                } else {
+                    wordsCompletedCount++;
+                    statWords.textContent = wordsCompletedCount;
+                    AudioFX.playSuccess();
+                    
+                    currentTextIndex++;
+                    saveAutoState();
+                    setTimeout(() => {
+                        if (isGaming) loadNextSentence();
+                    }, 400);
+                }
+            }
+        });
+
+        function startTimer() {
+            timerInterval = setInterval(() => {
+                timerSeconds--;
+                statTimer.textContent = `${timerSeconds}s`;
+                saveAutoState();
+
+                if (timerSeconds <= 0) {
+                    endGame();
+                }
+            }, 1000);
+        }
+
+        function endGame() {
+            clearInterval(timerInterval);
+            isGaming = false;
+            saveAutoState();
+            AudioFX.playSuccess();
+
+            const accuracy = totalCharsTyped > 0 
+                ? Math.max(0, Math.round(((totalCharsTyped - totalErrorsCount) / totalCharsTyped) * 100))
+                : 100;
+
+            document.getElementById('report-username').textContent = `${studentName} ${studentSurname}`;
+            document.getElementById('report-words').textContent = wordsCompletedCount;
+            document.getElementById('report-accuracy').textContent = `${accuracy}%`;
+
+            let praise = `Complimenti ${studentName}! Hai dimostrato grande impegno e concentrazione. La biologia è ricca di scoperte e le tue dita stanno diventando sempre più sicure!`;
+            if (accuracy >= 90) {
+                praise = `Fantastico ${studentName}! Precisione eccellente e ottima fluidità. Meriti il titolo speciale di Scienziato della Natura!`;
+            } else if (wordsCompletedCount >= 5) {
+                praise = `Ottimo lavoro ${studentName}! Hai completato tantissimi termini scientifici. Continua così!`;
+            }
+
+            document.getElementById('report-praise').textContent = praise;
+            modalReport.classList.remove('hidden');
+        }
+
+        // Salvataggio automatico anche in caso di chiusura improvvisa della scheda/finestra
+        window.addEventListener('beforeunload', () => {
+            saveAutoState();
+        });
+
+        window.onload = () => {
+            buildVirtualKeyboard();
+            checkAutoSaveOnLoad();
+        };
+    </script>
+</body>
+</html>
